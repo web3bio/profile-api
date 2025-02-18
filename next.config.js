@@ -4,12 +4,32 @@ const nextConfig = {
   swcMinify: true,
   trailingSlash: false,
   async rewrites() {
-    return [
-      {
-        source: "/:path*",
-        destination: "/api/:path*",
-      },
-    ];
+    return {
+      beforeFiles: [
+        {
+          source: "/profile/ethereum/:address*",
+          destination: "/profile/ens/:address*",
+        },
+        {
+          source: "/ns/ethereum/:address*",
+          destination: "/ns/ens/:address*",
+        },
+        {
+          source: "/profile/sns/:address*",
+          destination: "/profile/solana/:address*",
+        },
+        {
+          source: "/ns/sns/:address*",
+          destination: "/ns/solana/:address*",
+        },
+      ],
+      afterFiles: [
+        {
+          source: "/:path*",
+          destination: "/api/:path*",
+        },
+      ],
+    };
   },
   async redirects() {
     return [
