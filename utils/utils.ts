@@ -1,6 +1,7 @@
 import {
   errorHandle,
   formatText,
+  getUserHeaders,
   handleSearchPlatform,
   isValidEthereumAddress,
   isWeb3Address,
@@ -26,7 +27,17 @@ import {
 } from "@/utils/types";
 import { GET_PROFILES, queryIdentityGraph } from "@/utils/query";
 import { SourceType } from "./source";
-import { regexBtc, regexSolana, regexTwitterLink } from "@/utils/regexp";
+import {
+  regexBasenames,
+  regexBtc,
+  regexDotbit,
+  regexEns,
+  regexLinea,
+  regexSolana,
+  regexTwitterLink,
+  regexUnstoppableDomains,
+} from "@/utils/regexp";
+import { NextRequest } from "next/server";
 
 const UD_ACCOUNTS_LIST = [
   PlatformType.twitter,
@@ -65,7 +76,7 @@ export const resolveIdentityResponse = async (
   handle: string,
   headers: AuthHeaders,
   platform: PlatformType,
-  ns: boolean,
+  ns: boolean
 ) => {
   let identity = "";
 
@@ -78,7 +89,7 @@ export const resolveIdentityResponse = async (
     identity,
     platform as PlatformType,
     GET_PROFILES(ns),
-    headers,
+    headers
   );
   if (res.msg) {
     return {
@@ -125,14 +136,14 @@ export const resolveIdentityResponse = async (
   return await generateProfileStruct(
     profile,
     ns,
-    res.data.identity?.identityGraph?.edges,
+    res.data.identity?.identityGraph?.edges
   );
 };
 
 export async function generateProfileStruct(
   data: ProfileRecord,
   ns?: boolean,
-  edges?: IdentityGraphEdge[],
+  edges?: IdentityGraphEdge[]
 ): Promise<ProfileAPIResponse | ProfileNSResponse> {
   const nsObj = {
     address: data.address,
@@ -142,8 +153,8 @@ export async function generateProfileStruct(
     avatar: data.avatar
       ? await resolveEipAssetURL(data.avatar, data.identity)
       : data.platform === PlatformType.lens && data?.social?.uid
-        ? await getLensDefaultAvatar(Number(data.social.uid))
-        : null,
+      ? await getLensDefaultAvatar(Number(data.social.uid))
+      : null,
     description: data.description || null,
   };
   const { links, contenthash } = await generateSocialLinks(data, edges);
@@ -170,14 +181,14 @@ export const resolveIdentityRespond = async (
   handle: string,
   platform: PlatformType,
   headers: AuthHeaders,
-  ns: boolean,
+  ns: boolean
 ) => {
   try {
     const json = (await resolveIdentityResponse(
       handle,
       headers,
       platform,
-      ns,
+      ns
     )) as any;
     if (json.code) {
       return errorHandle({
@@ -200,7 +211,7 @@ export const resolveIdentityRespond = async (
 
 export const generateSocialLinks = async (
   data: ProfileRecord,
-  edges?: IdentityGraphEdge[],
+  edges?: IdentityGraphEdge[]
 ) => {
   const platform = data.platform;
   const texts = data.texts;
@@ -217,7 +228,7 @@ export const generateSocialLinks = async (
       let key = null;
       keys.forEach((i) => {
         key = Array.from(PLATFORM_DATA.keys()).find((k) =>
-          PLATFORM_DATA.get(k)?.ensText?.includes(i.toLowerCase()),
+          PLATFORM_DATA.get(k)?.ensText?.includes(i.toLowerCase())
         );
         if (key && texts[i]) {
           links[key] = {
@@ -237,7 +248,7 @@ export const generateSocialLinks = async (
         handle: resolvedHandle,
         sources: resolveVerifiedLink(
           `${PlatformType.farcaster},${resolvedHandle}`,
-          edges,
+          edges
         ),
       };
       if (!data.description) break;
@@ -251,7 +262,7 @@ export const generateSocialLinks = async (
           handle: resolveMatch,
           sources: resolveVerifiedLink(
             `${PlatformType.twitter},${resolveMatch}`,
-            edges,
+            edges
           ),
         };
       }
@@ -268,7 +279,7 @@ export const generateSocialLinks = async (
         if (Array.from(PLATFORM_DATA.keys()).includes(i as PlatformType)) {
           let key = null;
           key = Array.from(PLATFORM_DATA.keys()).find(
-            (k) => k === i.toLowerCase(),
+            (k) => k === i.toLowerCase()
           );
           if (key) {
             const resolvedHandle = resolveHandle(texts[i], i as PlatformType);
@@ -336,7 +347,7 @@ export const generateSocialLinks = async (
 };
 export const resolveVerifiedLink = (
   key: string,
-  edges?: IdentityGraphEdge[],
+  edges?: IdentityGraphEdge[]
 ) => {
   const res = [] as SourceType[];
 
@@ -383,6 +394,73 @@ export const resolveUniversalParams = (ids: string[]) => {
           [PlatformType.twitter, PlatformType.farcaster].includes(x.platform)
             ? x.identity
             : uglify(x.identity, x.platform)
-        }`,
+        }`
     );
+};
+
+export const resolveByPlatform = async (
+  req: NextRequest,
+  platform: PlatformType | string,
+  ns: boolean
+) => {
+  const { searchParams } = req.nextUrl;
+  const inputName = searchParams.get("handle");
+  const { handle, isValid } = resolveParamsByPlatform(inputName!, platform);
+  if (!isValid)
+    return errorHandle({
+      identity: handle,
+      platform: platform,
+      code: 404,
+      message: ErrorMessages.invalidIdentity,
+    });
+  const headers = getUserHeaders(req);
+  return resolveIdentityRespond(handle, platform as PlatformType, headers, ns);
+};
+
+const resolveParamsByPlatform = (
+  handle: string,
+  platform: PlatformType | string
+) => {
+  const res = {
+    handle: regexSolana.test(handle) ? handle : handle.toLowerCase(),
+    isValid: false,
+  };
+  if (!handle) res;
+  switch (platform) {
+    case PlatformType.ens:
+      res.isValid =
+        regexEns.test(res.handle) || isValidEthereumAddress(res.handle);
+      break;
+    case PlatformType.dotbit:
+      res.isValid = regexDotbit.test(handle) || isValidEthereumAddress(handle);
+      break;
+    case PlatformType.unstoppableDomains:
+      res.isValid =
+        regexUnstoppableDomains.test(handle) || isValidEthereumAddress(handle);
+      break;
+    // 1
+    case PlatformType.linea:
+      res.handle = isValidEthereumAddress(handle)
+        ? handle.toLowerCase()
+        : uglify(handle?.toLowerCase(), PlatformType.linea);
+      res.isValid =
+        regexLinea.test(res.handle) || isValidEthereumAddress(res.handle);
+      break;
+    case PlatformType.basenames:
+      res.handle = isValidEthereumAddress(handle)
+        ? handle.toLowerCase()
+        : uglify(handle?.toLowerCase(), PlatformType.basenames);
+      res.isValid =
+        regexBasenames.test(res.handle) || isValidEthereumAddress(res.handle);
+      break;
+    // 2
+    case PlatformType.lens:
+      break;
+    case PlatformType.farcaster:
+      break;
+    default:
+    // do noting
+  }
+
+  return res;
 };

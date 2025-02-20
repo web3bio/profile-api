@@ -2,7 +2,6 @@ import {
   PLATFORMS_TO_EXCLUDE,
   errorHandle,
   formatText,
-  handleSearchPlatform,
   isValidEthereumAddress,
   prettify,
   respondWithCache,
@@ -22,7 +21,6 @@ import {
 
 import { processJson } from "../../graph/utils";
 import { generateProfileStruct } from "@/utils/utils";
-import { regexBtc, regexSolana } from "@/utils/regexp";
 
 export const IDENTITY_GRAPH_SERVER =
   process.env.NEXT_PUBLIC_GRAPHQL_SERVER || "";

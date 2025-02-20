@@ -1,31 +1,9 @@
-import {
-  errorHandle,
-  getUserHeaders,
-  isValidEthereumAddress,
-  uglify,
-} from "@/utils/base";
 import { PlatformType } from "@/utils/platform";
-import { regexBasenames } from "@/utils/regexp";
-import { ErrorMessages } from "@/utils/types";
-import { resolveIdentityRespond } from "@/utils/utils";
 import { NextRequest } from "next/server";
+import { resolveByPlatform } from "@/utils/utils";
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = req.nextUrl;
-  const inputName = searchParams.get("handle") || "";
-  const headers = getUserHeaders(req);
-  const handle = isValidEthereumAddress(inputName)
-    ? inputName.toLowerCase()
-    : uglify(inputName, PlatformType.basenames);
-  if (!regexBasenames.test(handle) && !isValidEthereumAddress(handle))
-    return errorHandle({
-      identity: handle,
-      platform: PlatformType.basenames,
-      code: 404,
-      message: ErrorMessages.invalidIdentity,
-    });
-
-  return resolveIdentityRespond(handle, PlatformType.basenames, headers, false);
+  return resolveByPlatform(req, PlatformType.basenames, false);
 }
 
 export const runtime = "edge";
